@@ -8,6 +8,7 @@
   if (!DATA) return;
   var app = document.getElementById('board');
   var state = { q: '', category: 'all', tab: 'pre-token', sort: 'implied', dir: -1, selected: null };
+  var statAnimated = false;
 
   var usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
   function fmtUsd(n) {
@@ -149,10 +150,35 @@
     });
   }
 
+  // A subtle counter for the whole universe: how many pre-token protocols the board scored. It counts
+  // up once on first paint and then stays put, so filtering a table never re-runs the animation.
+  function statCounter() {
+    var total = DATA.board_size;
+    var label = ' pre-token protocols tracked';
+    var node = el('span', { class: 'stat-counter', 'aria-label': total + label });
+    function settle() { node.textContent = total + label; }
+    if (statAnimated || typeof window.requestAnimationFrame !== 'function') {
+      settle();
+      return node;
+    }
+    statAnimated = true;
+    var start = null;
+    function tick(ts) {
+      if (start === null) start = ts;
+      var p = Math.min(1, (ts - start) / 700);
+      node.textContent = Math.round(total * (1 - Math.pow(1 - p, 3))) + label;
+      if (p < 1) window.requestAnimationFrame(tick);
+      else settle();
+    }
+    window.requestAnimationFrame(tick);
+    return node;
+  }
+
   function header() {
     return el('header', { class: 'top' },
       el('div', { class: 'brand' }, el('span', { class: 'mark' }), el('span', { class: 'brand-name', text: 'Token Radar' })),
       el('div', { class: 'top-meta' },
+        statCounter(),
         el('span', { text: 'Snapshot ' + DATA.as_of }),
         el('span', { text: 'DefiLlama protocol index' }),
         el('span', { text: DATA.model_version + ' model' })

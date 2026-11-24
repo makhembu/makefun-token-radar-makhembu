@@ -53,8 +53,8 @@ export interface ModelConstants {
 }
 
 export const MODEL: ModelConstants = {
-  base_multiple: 0.25,
-  growth_weight: 0.5,
+  base_multiple: 0.28,
+  growth_weight: 0.55,
   growth_floor: -60,
   growth_cap: 120,
   maturity_floor: 0.6,
@@ -262,11 +262,11 @@ export function buildBoard(snapshot: Snapshot, model: ModelConstants = MODEL): B
 
 const round4 = (n: number): number => Math.round(n * 1e4) / 1e4;
 
-/** A step as one string: its action, then its cost and time, within the gate's 20..600 characters. */
+/** A step as one string: its action, then its cost and time, kept to a realistic 40..300 characters. */
 export function stepText(step: FarmStep): string {
   let s = `${step.text} Cost: ${step.cost}. Time: ${step.time}.`;
-  if (s.length > 600) s = `${s.slice(0, 596)}...`;
-  if (s.length < 20) s = `${s} Hold the position and check the protocol's own page.`;
+  if (s.length > 300) s = `${s.slice(0, 297)}...`;
+  if (s.length < 40) s = `${s} Review it against the protocol's own docs before you sign anything.`;
   return s;
 }
 
@@ -319,7 +319,7 @@ export function farmSteps(p: SnapshotProtocol, age: number | null): FarmStep[] {
   const action = actionFor(p, capital, chain);
   return [
     {
-      text: `Use a fresh wallet that holds only the funds you plan to farm, and keep its seed phrase offline.`,
+      text: `Create a fresh wallet used only for farming, fund it from a known exchange, and store its seed phrase offline in two separate places.`,
       cost: 'under $3 of gas for the first transaction',
       time: '5 minutes',
     },
@@ -329,22 +329,22 @@ export function farmSteps(p: SnapshotProtocol, age: number | null): FarmStep[] {
       time: '15 minutes to set up',
     },
     {
-      text: `Make one qualifying action each week, such as a deposit, a borrow, a swap or a vote.`,
+      text: `Make one qualifying action every week, such as a deposit, a borrow, a swap or a governance vote, and save each transaction hash.`,
       cost: 'about $2 of gas a week',
       time: '10 minutes a week',
     },
     {
-      text: `Hold the position for at least ${hold} days so the activity is counted in more than one snapshot.`,
+      text: `Keep the position open for at least ${hold} days so the activity is counted in more than one snapshot, and avoid moving funds between wallets.`,
       cost: `the $${capital} stays in the position`,
       time: `${hold} days`,
     },
     {
-      text: `Before you withdraw, open the protocol's own points or rewards page and claim only from the link it publishes.`,
+      text: `Before withdrawing, open the protocol's official points or rewards page, confirm the URL yourself, and claim only through the link it publishes.`,
       cost: 'no fee to check, and never pay to claim',
       time: '10 minutes',
     },
     {
-      text: `Write the wallet, the dates and every transaction in a farm log so you can repeat the position or unwind it.`,
+      text: `Record the wallet address, the dates and every transaction in a farm log, so you can repeat the position later or unwind it cleanly.`,
       cost: 'nothing but the log',
       time: '5 minutes',
     },

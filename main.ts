@@ -50,6 +50,11 @@ if (issue !== null) {
   process.exit(1);
 }
 
+const totalImplied = board.reduce((sum, row) => sum + row.implied_value_usd, 0);
+console.log(
+  `token radar: ${board.length} scored pre-token protocols total $${totalImplied.toLocaleString('en-US')} of implied value`,
+);
+
 mkdirSync(out, { recursive: true });
 writeFileSync(join(out, 'board.json'), `${JSON.stringify({ rows: board })}\n`);
 writeFileSync(join(out, 'data.js'), dataScript(radar));
