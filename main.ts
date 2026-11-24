@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { boardIssue, buildRadar, dataScript, parseSnapshot } from './lib/model.ts';
 import { buildDossier } from './vendor/makefun-board.ts';
 
+/** The directory this program is mounted from: the source of dashboard/ and screenshots/. */
 const here = fileURLToPath(new URL('.', import.meta.url));
 
 /** The scorer's own caps (reference/gate.json): the text cap shapes the bytes, the rest refuse. */
@@ -33,31 +34,6 @@ function arg(name: string, fallback: string): string {
   const withEquals = process.argv.find((a) => a.startsWith(`--${name}=`));
   return withEquals === undefined ? fallback : withEquals.slice(name.length + 3);
 }
-
-const inputArg = arg('input', '/input');
-const inputFile = inputArg.endsWith('.json') ? inputArg : join(inputArg, 'snapshot.json');
-if (!existsSync(inputFile)) {
-  process.stderr.write(`token radar: no snapshot at ${inputFile}: pass --input <snapshot.json|directory> or mount the sealed /input\n`);
-  process.exit(2);
-}
-const out = arg('output', process.env.MAKEFUN_OUTPUT_DIR ?? '/output');
-
-const snapshot = parseSnapshot(readFileSync(inputFile, 'utf8'));
-const { board, radar } = buildRadar(snapshot);
-const issue = boardIssue(board, snapshot);
-if (issue !== null) {
-  process.stderr.write(`token radar: the model wrote a board the gate refuses: ${issue}\n`);
-  process.exit(1);
-}
-
-const totalImplied = board.reduce((sum, row) => sum + row.implied_value_usd, 0);
-console.log(
-  `token radar: ${board.length} scored pre-token protocols total $${totalImplied.toLocaleString('en-US')} of implied value`,
-);
-
-mkdirSync(out, { recursive: true });
-writeFileSync(join(out, 'board.json'), `${JSON.stringify({ rows: board })}\n`);
-writeFileSync(join(out, 'data.js'), dataScript(radar));
 
 /** Copy one directory's regular files into `to`, skipping names that start with a dot. */
 function copyFiles(from: string, to: string): string[] {
@@ -74,6 +50,36 @@ function copyFiles(from: string, to: string): string[] {
   return copied;
 }
 
+// Resolve the snapshot first: without one there is nothing to score, so fail before touching /output.
+const inputArg = arg('input', '/input');
+const inputFile = inputArg.endsWith('.json') ? inputArg : join(inputArg, 'snapshot.json');
+if (!existsSync(inputFile)) {
+  process.stderr.write(`token radar: no snapshot at ${inputFile}: pass --input <snapshot.json|directory> or mount the sealed /input\n`);
+  process.exit(2);
+}
+const out = arg('output', process.env.MAKEFUN_OUTPUT_DIR ?? '/output');
+
+// Score the snapshot and refuse to write a board the gate would reject.
+const snapshot = parseSnapshot(readFileSync(inputFile, 'utf8'));
+const { board, radar } = buildRadar(snapshot);
+const issue = boardIssue(board, snapshot);
+if (issue !== null) {
+  process.stderr.write(`token radar: the model wrote a board the gate refuses: ${issue}\n`);
+  process.exit(1);
+}
+
+// Report the board's headline figure: the summed implied value of every scored pre-token protocol.
+const totalImplied = board.reduce((sum, row) => sum + row.implied_value_usd, 0);
+console.log(
+  `token radar: ${board.length} scored pre-token protocols total $${totalImplied.toLocaleString('en-US')} of implied value`,
+);
+
+// The board and the dashboard's dataset come from the same scored rows.
+mkdirSync(out, { recursive: true });
+writeFileSync(join(out, 'board.json'), `${JSON.stringify({ rows: board })}\n`);
+writeFileSync(join(out, 'data.js'), dataScript(radar));
+
+// Ship the static dashboard and its screenshots beside the data the page reads.
 copyFiles(join(here, 'dashboard'), join(out, 'dashboard'));
 const shots = copyFiles(join(here, 'screenshots'), join(out, 'screenshots'));
 if (shots.length < 3) {

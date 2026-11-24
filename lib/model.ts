@@ -8,10 +8,10 @@
 //
 // Implied value follows only from the snapshot's own figures:
 //
-//   base       = tvl_usd x BASE_MULTIPLE
-//   growth     = clamp(change_7d, -60, 120) per cent
-//   growthMult = 1 + (growth / 100) x GROWTH_WEIGHT
-//   maturity   = 0.6 + min(age_days, 1095) / 1095 x 0.4   (age_days unknown: 365)
+//   base       = tvl_usd x base_multiple
+//   growth     = clamp(change_7d, growth_floor, growth_cap) per cent
+//   growthMult = 1 + (growth / 100) x growth_weight
+//   maturity   = maturity_floor + min(age_days, maturity_days) / maturity_days x maturity_range
 //   implied    = max(1, round(base x growthMult x maturity))
 //
 // The constants are the house model's, stated in the dashboard and changeable in the model sandbox. No
@@ -71,6 +71,10 @@ export const EARLY_ROWS = 160;
 
 /** How many live-token protocols the Live token view carries, by market cap. */
 export const LIVE_ROWS = 24;
+
+/** The farm-step length contract: the generator stays inside it and the gate enforces it. */
+const STEP_MIN = 40;
+const STEP_MAX = 300;
 
 /** A farm step: the action, what it costs, and how long it takes. */
 export interface FarmStep {
@@ -163,7 +167,10 @@ function finite(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
-/** A whole day count from `from` to `to`, clamped at zero; null when either date is absent or bad. */
+/** Round to four decimals so the multipliers board.json carries stay readable. */
+const round4 = (n: number): number => Math.round(n * 1e4) / 1e4;
+
+/** A whole day count from `asOf` to `listedAt`, clamped at zero; null when either date is absent or bad. */
 export function ageDays(asOf: string, listedAt: string | null): number | null {
   if (listedAt === null) return null;
   const a = Date.parse(`${asOf}T00:00:00Z`);
@@ -201,14 +208,6 @@ export function isRankable(p: SnapshotProtocol): boolean {
 /** The snapshot's protocol by slug. */
 function bySlug(protocols: SnapshotProtocol[]): Map<string, SnapshotProtocol> {
   return new Map(protocols.map((p) => [p.slug, p]));
-}
-
-/** The headline sentence's figures: how many watchlist slugs, how many rows, how many live protocols. */
-export interface BoardSummary {
-  watchlist_size: number;
-  board_size: number;
-  early_size: number;
-  live_size: number;
 }
 
 /** The protocols the board ranks, strongest first, with ranks 1..n. */
@@ -260,13 +259,11 @@ export function buildBoard(snapshot: Snapshot, model: ModelConstants = MODEL): B
   }));
 }
 
-const round4 = (n: number): number => Math.round(n * 1e4) / 1e4;
-
-/** A step as one string: its action, then its cost and time, kept to a realistic 40..300 characters. */
+/** A step as one string: its action, then its cost and time, kept to a realistic length. */
 export function stepText(step: FarmStep): string {
   let s = `${step.text} Cost: ${step.cost}. Time: ${step.time}.`;
-  if (s.length > 300) s = `${s.slice(0, 297)}...`;
-  if (s.length < 40) s = `${s} Review it against the protocol's own docs before you sign anything.`;
+  if (s.length > STEP_MAX) s = `${s.slice(0, STEP_MAX - 3)}...`;
+  if (s.length < STEP_MIN) s = `${s} Review it against the protocol's own docs before you sign anything.`;
   return s;
 }
 
@@ -465,7 +462,7 @@ export function boardIssue(board: BoardRow[], snapshot: Snapshot): string | null
   for (const r of board) {
     const steps = r.farm_steps;
     if (steps.length < 3 || steps.length > 12) return `${r.slug} has ${steps.length} farm steps`;
-    for (const s of steps) if (s.length < 20 || s.length > 600) return `${r.slug} has a farm step of ${s.length} characters`;
+    for (const s of steps) if (s.length < STEP_MIN || s.length > STEP_MAX) return `${r.slug} has a farm step of ${s.length} characters`;
     if (!Number.isSafeInteger(r.implied_value_usd) || r.implied_value_usd <= 0) return `${r.slug} has implied value ${r.implied_value_usd}`;
   }
   return null;
